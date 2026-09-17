@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { getApiUrl, parseJsonResponse } from '../api'
 
 type EstimateResult = {
@@ -12,7 +12,10 @@ type EstimateResult = {
 export default function CameraPage() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+
   const [stream, setStream] = useState<MediaStream | null>(null)
+  const [capturedPreviewUrl, setCapturedPreviewUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [capturing, setCapturing] = useState(false)
   const [result, setResult] = useState<EstimateResult | null>(null)
@@ -23,29 +26,71 @@ export default function CameraPage() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [showErrorCode, setShowErrorCode] = useState<string | null>(null)
 
-  // Start camera
-  useEffect(() => {
-    async function start() {
-      try {
-        const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false })
-        setStream(s)
-        if (videoRef.current) {
-          videoRef.current.srcObject = s
-          await videoRef.current.play().catch(()=>{})
-        }
-        setError(null)
-      } catch (e: any) {
-        setError(e?.message || 'Camera permission denied. Please allow camera access and reload.')
-      }
+  // Turn camera hardware completely OFF
+  const stopCamera = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => {
+        try {
+          track.stop()
+        } catch {}
+      })
+      streamRef.current = null
     }
-    start()
-    return () => {
-      stream?.getTracks().forEach(t => t.stop())
+    setStream(null)
+    if (videoRef.current) {
+      videoRef.current.srcObject = null
     }
-    // eslint-disable-next-line
   }, [])
 
-  // Face + lighting detection loop
+  // Turn camera hardware ON
+  const startCamera = useCallback(async () => {
+    stopCamera()
+    setError(null)
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false
+      })
+      streamRef.current = s
+      setStream(s)
+      if (videoRef.current) {
+        videoRef.current.srcObject = s
+        await videoRef.current.play().catch(() => {})
+      }
+    } catch (e: any) {
+      setError(e?.message || 'Camera permission denied. Please allow camera access and reload.')
+    }
+  }, [stopCamera])
+
+  // Lifecycle: Automatically start when entering page, stop when leaving page or switching tabs
+  useEffect(() => {
+    startCamera()
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        stopCamera()
+      } else if (!result && !capturedPreviewUrl) {
+        startCamera()
+      }
+    }
+
+    const handleWindowLeave = () => {
+      stopCamera()
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('pagehide', handleWindowLeave)
+    window.addEventListener('beforeunload', handleWindowLeave)
+
+    return () => {
+      stopCamera()
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('pagehide', handleWindowLeave)
+      window.removeEventListener('beforeunload', handleWindowLeave)
+    }
+  }, [startCamera, stopCamera, result, capturedPreviewUrl])
+
+  // Face + lighting detection loop (only active while live stream is running)
   useEffect(() => {
     if (!stream || !videoRef.current || result) return
     let raf = 0
@@ -59,7 +104,7 @@ export default function CameraPage() {
     const check = async () => {
       const video = videoRef.current
       const canvas = canvasRef.current
-      if (!video || !canvas || video.readyState < 2) {
+      if (!video || !canvas || video.readyState < 2 || !streamRef.current) {
         raf = requestAnimationFrame(check)
         return
       }
@@ -93,9 +138,7 @@ export default function CameraPage() {
             faces = facesDetected.length
           } catch { faces = null }
         } else {
-          // Fallback heuristic: assume 1 face if brightness ok and video has content
-          // For demo we simulate detection variability: if canvas has very low variance -> no face
-          // Compute variance quickly
+          // Fallback heuristic: variance detection
           let variance = 0
           const mean = avg
           for (let i=0;i<data.length;i+=4) {
@@ -104,7 +147,7 @@ export default function CameraPage() {
           }
           variance /= (w*h)
           if (variance < 80) faces = 0
-          else if (variance > 1800) faces = 2 // pretend multiple faces
+          else if (variance > 1800) faces = 2
           else faces = 1
         }
 
@@ -136,9 +179,6 @@ export default function CameraPage() {
 
   const captureAndEstimate = async () => {
     if (!videoRef.current || !canvasRef.current) return
-    if (!status.ready) {
-      // still allow capture but warn — backend will re-validate
-    }
     setCapturing(true)
     setShowErrorCode(null)
     try {
@@ -147,13 +187,17 @@ export default function CameraPage() {
       canvas.width = video.videoWidth
       canvas.height = video.videoHeight
       const ctx = canvas.getContext('2d')!
-      // mirror fix? video is mirrored via css, so flip canvas
       ctx.translate(canvas.width, 0)
       ctx.scale(-1, 1)
       ctx.drawImage(video, 0, 0)
 
       const blob: Blob | null = await new Promise(res => canvas.toBlob(r => res(r), 'image/jpeg', 0.92))
       if (!blob) throw new Error('Failed to capture')
+
+      // Save preview URL and immediately shut off camera hardware
+      const preview = URL.createObjectURL(blob)
+      setCapturedPreviewUrl(preview)
+      stopCamera()
 
       setIsProcessing(true)
       const form = new FormData()
@@ -179,13 +223,18 @@ export default function CameraPage() {
       setCapturing(false)
       setIsProcessing(false)
       setError(e.message)
-      setTimeout(()=>setError(null), 4000)
+      setTimeout(() => setError(null), 5000)
     }
   }
 
   const retake = () => {
+    if (capturedPreviewUrl) {
+      URL.revokeObjectURL(capturedPreviewUrl)
+    }
+    setCapturedPreviewUrl(null)
     setResult(null)
     setShowErrorCode(null)
+    startCamera()
   }
 
   return (
@@ -195,42 +244,58 @@ export default function CameraPage() {
         <div className="bg-white rounded-[24px] shadow-soft border border-slate-100 overflow-hidden">
           <div className="px-5 sm:px-6 py-4 border-b border-slate-100 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-              <span className="font-bold text-slate-900">Live Preview</span>
-              <span className="hidden sm:inline text-xs font-semibold tracking-widest text-slate-500 bg-slate-50 px-2 py-1 rounded-full border">{status.lighting.toUpperCase()} • {status.brightness}</span>
+              <div className={`w-2 h-2 rounded-full ${stream ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></div>
+              <span className="font-bold text-slate-900">{stream ? 'Live Preview' : 'Captured Photo'}</span>
+              <span className="hidden sm:inline text-xs font-semibold tracking-widest text-slate-500 bg-slate-50 px-2 py-1 rounded-full border">
+                {stream ? `${status.lighting.toUpperCase()} • ${status.brightness}` : 'CAMERA OFF'}
+              </span>
             </div>
-            <div className="text-xs text-slate-500 hidden sm:block">{status.faces !== null ? `${status.faces} face${status.faces===1?'':'s'} detected` : 'Detecting...'}</div>
+            <div className="text-xs text-slate-500 hidden sm:block">
+              {stream ? (status.faces !== null ? `${status.faces} face${status.faces===1?'':'s'} detected` : 'Detecting...') : 'Camera is off'}
+            </div>
           </div>
 
-          <div className="relative bg-slate-900 aspect-[4/3] sm:aspect-[16/10] overflow-hidden">
-            <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover scale-x-[-1]" />
+          <div className="relative bg-slate-900 aspect-[4/3] sm:aspect-[16/10] overflow-hidden flex items-center justify-center">
+            {capturedPreviewUrl ? (
+              <img src={capturedPreviewUrl} alt="Captured preview" className="w-full h-full object-cover scale-x-[-1]" />
+            ) : (
+              <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover scale-x-[-1]" />
+            )}
             <canvas ref={canvasRef} className="hidden" />
 
-            {/* Overlay frame */}
-            <div className="absolute inset-0 pointer-events-none">
-              <div className="absolute inset-4 sm:inset-8 border border-white/20 rounded-[20px]"></div>
-              <div className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[58%] h-[72%] rounded-[24px] border-2 transition ${status.ready ? 'border-emerald-400 shadow-[0_0_30px_rgba(52,211,153,0.5)]' : 'border-white/50'}`}></div>
-              {/* corners */}
-              <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[58%] h-[72%]">
-                <div className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-sky-400 rounded-tl-xl"></div>
-                <div className="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-sky-400 rounded-tr-xl"></div>
-                <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-sky-400 rounded-bl-xl"></div>
-                <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-sky-400 rounded-br-xl"></div>
-              </div>
-              <div className={`absolute top-4 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full text-xs font-bold tracking-wide flex items-center gap-2 ${status.ready ? 'bg-emerald-500 text-white' : 'bg-amber-500 text-white'}`}>
-                <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
-                {status.message}
-              </div>
-              <div className="absolute bottom-4 left-4 right-4 flex justify-between items-center">
-                <div className="bg-black/60 backdrop-blur text-white text-xs px-3 py-2 rounded-full flex items-center gap-2">
-                  <span className={`w-2 h-2 rounded-full ${status.ready ? 'bg-emerald-400' : 'bg-amber-400'}`}></span>
-                  {status.ready ? 'Ready' : 'Align face'}
+            {/* Overlay frame (only when live streaming) */}
+            {stream && !capturedPreviewUrl && (
+              <div className="absolute inset-0 pointer-events-none">
+                <div className="absolute inset-4 sm:inset-8 border border-white/20 rounded-[20px]"></div>
+                <div className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[58%] h-[72%] rounded-[24px] border-2 transition ${status.ready ? 'border-emerald-400 shadow-[0_0_30px_rgba(52,211,153,0.5)]' : 'border-white/50'}`}></div>
+                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[58%] h-[72%]">
+                  <div className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-sky-400 rounded-tl-xl"></div>
+                  <div className="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-sky-400 rounded-tr-xl"></div>
+                  <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-sky-400 rounded-bl-xl"></div>
+                  <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-sky-400 rounded-br-xl"></div>
                 </div>
-                <div className="bg-black/60 backdrop-blur text-white text-xs px-3 py-1.5 rounded-full">
-                  {stream ? 'HD • 30fps' : 'No camera'}
+                <div className={`absolute top-4 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full text-xs font-bold tracking-wide flex items-center gap-2 ${status.ready ? 'bg-emerald-500 text-white' : 'bg-amber-500 text-white'}`}>
+                  <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
+                  {status.message}
+                </div>
+                <div className="absolute bottom-4 left-4 right-4 flex justify-between items-center">
+                  <div className="bg-black/60 backdrop-blur text-white text-xs px-3 py-2 rounded-full flex items-center gap-2">
+                    <span className={`w-2 h-2 rounded-full ${status.ready ? 'bg-emerald-400' : 'bg-amber-400'}`}></span>
+                    {status.ready ? 'Ready' : 'Align face'}
+                  </div>
+                  <div className="bg-black/60 backdrop-blur text-white text-xs px-3 py-1.5 rounded-full">
+                    HD • 30fps
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
+
+            {capturedPreviewUrl && (
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full text-xs font-bold bg-slate-900/80 text-white backdrop-blur flex items-center gap-2">
+                <span className="w-2 h-2 bg-emerald-400 rounded-full"></span>
+                Photo Captured • Camera Powered Off
+              </div>
+            )}
 
             {isProcessing && (
               <div className="absolute inset-0 bg-slate-900/70 backdrop-blur-sm flex flex-col items-center justify-center text-white">
