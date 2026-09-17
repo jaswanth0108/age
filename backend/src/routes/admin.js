@@ -103,18 +103,43 @@ router.get('/captures', authMiddleware, (req, res) => {
 });
 
 router.get('/images/:id', authMiddleware, (req, res) => {
-  const { loadDB } = require('../db/store');
+  const { loadDB, STORAGE_PATH } = require('../db/store');
   const db = loadDB();
   const cap = db.captures.find(c => c.id === req.params.id);
-  if (!cap || !cap.imagePath) return res.status(404).json({ error: 'Image not found' });
-  if (!fs.existsSync(cap.imagePath)) return res.status(404).json({ error: 'File missing' });
+  if (!cap) return res.status(404).json({ error: 'Capture not found' });
+
+  // Locate image across possible saved paths or storage directory
+  const candidatePaths = [
+    cap.imagePath,
+    cap.imagePath ? path.join(STORAGE_PATH, path.basename(cap.imagePath)) : null,
+    path.join(STORAGE_PATH, `${cap.id}.jpg`),
+    path.join(STORAGE_PATH, `${cap.id}.jpeg`),
+    path.join(STORAGE_PATH, `${cap.id}.png`),
+    path.join(STORAGE_PATH, `${cap.id}.webp`),
+    path.join(__dirname, '../../storage', `${cap.id}.jpg`),
+    path.join(__dirname, '../storage', `${cap.id}.jpg`)
+  ].filter(Boolean);
+
+  let targetFile = candidatePaths.find(p => fs.existsSync(p));
+
+  if (!targetFile) {
+    return res.status(404).json({ error: 'Image file not found on server disk' });
+  }
+
   // Infer content type
-  const ext = path.extname(cap.imagePath).toLowerCase();
+  const ext = path.extname(targetFile).toLowerCase();
   const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+
   res.setHeader('Content-Type', mime);
   res.setHeader('Cache-Control', 'private, no-store');
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  fs.createReadStream(cap.imagePath).pipe(res);
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  if (req.headers.origin) {
+    res.setHeader('Access-Control-Allow-Origin', req.headers.origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  }
+
+  fs.createReadStream(targetFile).pipe(res);
   addAudit({ action: 'view_image', ip: req.ip, username: req.admin.username, targetId: req.params.id });
 });
 

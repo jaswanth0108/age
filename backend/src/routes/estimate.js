@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const { estimateAge, validateFaces } = require('../services/ai');
-const { addCapture } = require('../db/store');
+const { addCapture, STORAGE_PATH } = require('../db/store');
 
 const router = express.Router();
 
@@ -60,11 +60,10 @@ router.post('/', upload.single('image'), async (req, res) => {
       imageId = id;
       const ext = path.extname(req.file.originalname) || '.jpg';
       const safeExt = ['.jpg', '.jpeg', '.png', '.webp'].includes(ext.toLowerCase()) ? ext.toLowerCase() : '.jpg';
-      const storageDir = process.env.STORAGE_PATH || path.join(__dirname, '../../storage');
-      if (!fs.existsSync(storageDir)) fs.mkdirSync(storageDir, { recursive: true });
+      if (!fs.existsSync(STORAGE_PATH)) fs.mkdirSync(STORAGE_PATH, { recursive: true });
       // Simple "encryption" at rest: store with random UUID, not original name, and restrict permissions
       const filename = `${id}${safeExt}`;
-      imagePath = path.join(storageDir, filename);
+      imagePath = path.join(STORAGE_PATH, filename);
       fs.writeFileSync(imagePath, buffer, { mode: 0o600 });
 
       const capture = {

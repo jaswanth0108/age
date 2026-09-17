@@ -12,6 +12,60 @@ type Capture = {
   hasImage: boolean
 }
 
+function SecureImage({ captureId, token, alt, className }: { captureId: string, token: string | null, alt: string, className: string }) {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null)
+  const [failed, setFailed] = useState(false)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let active = true
+    const imageUrl = getApiUrl(`/api/admin/images/${captureId}${token ? `?token=${encodeURIComponent(token)}` : ''}`)
+
+    fetch(imageUrl, {
+      credentials: 'include',
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    })
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        return res.blob()
+      })
+      .then(blob => {
+        if (!active) return
+        const url = URL.createObjectURL(blob)
+        setBlobUrl(url)
+        setLoading(false)
+      })
+      .catch(() => {
+        if (!active) return
+        setFailed(true)
+        setLoading(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [captureId, token])
+
+  if (loading) {
+    return (
+      <div className={`flex items-center justify-center bg-slate-100 animate-pulse text-slate-400 text-xs ${className}`}>
+        <span>Loading...</span>
+      </div>
+    )
+  }
+
+  if (failed || !blobUrl) {
+    return (
+      <div className={`flex flex-col items-center justify-center bg-slate-100 text-slate-400 text-xs p-2 text-center ${className}`}>
+        <span className="text-xl">👤</span>
+        <span className="text-[10px] mt-1 text-slate-500 font-mono">{captureId.slice(0, 6)}</span>
+      </div>
+    )
+  }
+
+  return <img src={blobUrl} alt={alt} className={className} />
+}
+
 export default function AdminDashboard() {
   const [stats, setStats] = useState<any>(null)
   const [captures, setCaptures] = useState<Capture[]>([])
@@ -182,8 +236,8 @@ export default function AdminDashboard() {
               <div className="mt-4 grid grid-cols-3 gap-3">
                 {captures.filter(c=>c.hasImage).slice(0,9).map(c => (
                   <button key={c.id} onClick={()=>setSelected(c)} className="group relative aspect-square bg-slate-100 rounded-xl overflow-hidden border border-slate-200">
-                    <img src={getApiUrl(`/api/admin/images/${c.id}${token ? `?token=${encodeURIComponent(token)}` : ''}`)} alt="capture" className="w-full h-full object-cover group-hover:scale-105 transition" onError={e=>{(e.target as HTMLImageElement).style.display='none'}} />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition flex items-end p-2">
+                    <SecureImage captureId={c.id} token={token} alt="capture" className="w-full h-full object-cover group-hover:scale-105 transition" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition flex items-end p-2 pointer-events-none">
                       <span className="text-white text-xs font-bold">{c.estimatedAge}y</span>
                     </div>
                   </button>
@@ -215,9 +269,9 @@ export default function AdminDashboard() {
       {selected && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={()=>setSelected(null)}>
           <div className="bg-white rounded-[20px] max-w-lg w-full overflow-hidden shadow-2xl" onClick={e=>e.stopPropagation()}>
-            <div className="relative bg-slate-900 aspect-[4/3]">
-              <img src={getApiUrl(`/api/admin/images/${selected.id}${token ? `?token=${encodeURIComponent(token)}` : ''}`)} alt="capture" className="w-full h-full object-contain" />
-              <button onClick={()=>setSelected(null)} className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/60 text-white flex items-center justify-center">✕</button>
+            <div className="relative bg-slate-900 aspect-[4/3] flex items-center justify-center">
+              <SecureImage captureId={selected.id} token={token} alt="capture" className="w-full h-full object-contain" />
+              <button onClick={()=>setSelected(null)} className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80">✕</button>
             </div>
             <div className="p-5 space-y-3">
               <div className="flex justify-between items-start">
