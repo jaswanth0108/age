@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { getApiUrl, parseJsonResponse } from '../api'
 
 type EstimateResult = {
   estimatedAge: number
@@ -159,11 +160,11 @@ export default function CameraPage() {
       form.append('image', blob, 'capture.jpg')
       form.append('consent', String(consent))
 
-      const resp = await fetch('/api/estimate', { method: 'POST', body: form })
-      const data = await resp.json()
+      const resp = await fetch(getApiUrl('/api/estimate'), { method: 'POST', body: form })
+      const data = await parseJsonResponse(resp)
       if (!resp.ok) {
         setShowErrorCode(data.code || null)
-        throw new Error(data.error || 'Estimation failed')
+        throw new Error(data.error || `Estimation failed (HTTP ${resp.status})`)
       }
       setResult({
         estimatedAge: data.estimatedAge,

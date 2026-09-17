@@ -3,7 +3,7 @@ const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_jwt_secret_change_in_prod_32chars';
 
 function authMiddleware(req, res, next) {
-  const token = req.cookies?.token || req.headers.authorization?.replace('Bearer ', '');
+  const token = req.cookies?.token || req.headers.authorization?.replace(/^Bearer\s+/i, '') || req.query?.token;
   if (!token) {
     return res.status(401).json({ error: 'Unauthorized: No token' });
   }

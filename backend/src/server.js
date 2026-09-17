@@ -19,9 +19,35 @@ app.use(helmet({
   contentSecurityPolicy: false
 }));
 
-// CORS - allow frontend
+// CORS - allow frontend across local dev and cloud deployments
+const rawFrontendUrl = process.env.FRONTEND_URL || '';
+const configuredOrigins = rawFrontendUrl
+  .split(',')
+  .map(s => s.trim().replace(/\/+$/, ''))
+  .filter(Boolean);
+
 app.use(cors({
-  origin: [FRONTEND_URL, 'http://localhost:5173', 'http://localhost:3000'],
+  origin: (origin, callback) => {
+    // Allow non-browser requests (e.g. mobile, curl, server-to-server)
+    if (!origin) return callback(null, true);
+    const cleanOrigin = origin.replace(/\/+$/, '');
+    
+    // Check configured origins or wildcard
+    if (
+      configuredOrigins.includes(cleanOrigin) ||
+      configuredOrigins.includes('*') ||
+      rawFrontendUrl === '*' ||
+      cleanOrigin.includes('localhost') ||
+      cleanOrigin.includes('127.0.0.1') ||
+      cleanOrigin.endsWith('.onrender.com') ||
+      cleanOrigin.endsWith('.vercel.app') ||
+      cleanOrigin.endsWith('.netlify.app')
+    ) {
+      return callback(null, true);
+    }
+    // Permissive fallback
+    return callback(null, true);
+  },
   credentials: true
 }));
 

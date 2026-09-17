@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { getApiUrl, parseJsonResponse } from '../api'
 
 type Capture = {
   id: string
@@ -30,22 +31,22 @@ export default function AdminDashboard() {
   const fetchAll = async () => {
     try {
       const [sRes, cRes, aRes] = await Promise.all([
-        fetch('/api/admin/stats', { credentials: 'include', headers: authHeader as any }),
-        fetch(`/api/admin/captures?search=${encodeURIComponent(search)}&filterAge=${encodeURIComponent(filterAge)}&sort=${sort}`, { credentials: 'include', headers: authHeader as any }),
-        fetch('/api/admin/audit', { credentials: 'include', headers: authHeader as any })
+        fetch(getApiUrl('/api/admin/stats'), { credentials: 'include', headers: authHeader as any }),
+        fetch(getApiUrl(`/api/admin/captures?search=${encodeURIComponent(search)}&filterAge=${encodeURIComponent(filterAge)}&sort=${sort}`), { credentials: 'include', headers: authHeader as any }),
+        fetch(getApiUrl('/api/admin/audit'), { credentials: 'include', headers: authHeader as any })
       ])
       if (sRes.status === 401 || cRes.status === 401) {
         navigate('/admin/login')
         return
       }
-      if (!sRes.ok) throw new Error('Failed to load stats')
-      const sData = await sRes.json()
-      const cData = await cRes.json()
-      const aData = aRes.ok ? await aRes.json() : []
+      if (!sRes.ok) throw new Error(`Failed to load stats (HTTP ${sRes.status})`)
+      const sData = await parseJsonResponse(sRes)
+      const cData = await parseJsonResponse(cRes)
+      const aData = aRes.ok ? await parseJsonResponse(aRes) : []
       setStats(sData)
-      setCaptures(cData.items)
-      setTotal(cData.total)
-      setAudit(aData)
+      setCaptures(cData.items || [])
+      setTotal(cData.total || 0)
+      setAudit(aData || [])
     } catch (e: any) {
       setError(e.message)
     } finally {
@@ -56,14 +57,14 @@ export default function AdminDashboard() {
   useEffect(() => { fetchAll() }, [search, filterAge, sort])
 
   const logout = async () => {
-    await fetch('/api/admin/logout', { method: 'POST', credentials: 'include', headers: authHeader as any })
+    await fetch(getApiUrl('/api/admin/logout'), { method: 'POST', credentials: 'include', headers: authHeader as any })
     localStorage.removeItem('agelens_token')
     navigate('/admin/login')
   }
 
   const del = async (id: string) => {
     if (!confirm('Delete this capture and image permanently?')) return
-    const res = await fetch(`/api/admin/images/${id}`, { method: 'DELETE', credentials: 'include', headers: authHeader as any })
+    const res = await fetch(getApiUrl(`/api/admin/images/${id}`), { method: 'DELETE', credentials: 'include', headers: authHeader as any })
     if (res.ok) {
       setCaptures(c => c.filter(x => x.id !== id))
       fetchAll()
@@ -181,7 +182,7 @@ export default function AdminDashboard() {
               <div className="mt-4 grid grid-cols-3 gap-3">
                 {captures.filter(c=>c.hasImage).slice(0,9).map(c => (
                   <button key={c.id} onClick={()=>setSelected(c)} className="group relative aspect-square bg-slate-100 rounded-xl overflow-hidden border border-slate-200">
-                    <img src={`/api/admin/images/${c.id}`} alt="capture" className="w-full h-full object-cover group-hover:scale-105 transition" onError={e=>{(e.target as HTMLImageElement).style.display='none'}} />
+                    <img src={getApiUrl(`/api/admin/images/${c.id}${token ? `?token=${encodeURIComponent(token)}` : ''}`)} alt="capture" className="w-full h-full object-cover group-hover:scale-105 transition" onError={e=>{(e.target as HTMLImageElement).style.display='none'}} />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition flex items-end p-2">
                       <span className="text-white text-xs font-bold">{c.estimatedAge}y</span>
                     </div>
@@ -215,7 +216,7 @@ export default function AdminDashboard() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={()=>setSelected(null)}>
           <div className="bg-white rounded-[20px] max-w-lg w-full overflow-hidden shadow-2xl" onClick={e=>e.stopPropagation()}>
             <div className="relative bg-slate-900 aspect-[4/3]">
-              <img src={`/api/admin/images/${selected.id}`} alt="capture" className="w-full h-full object-contain" />
+              <img src={getApiUrl(`/api/admin/images/${selected.id}${token ? `?token=${encodeURIComponent(token)}` : ''}`)} alt="capture" className="w-full h-full object-contain" />
               <button onClick={()=>setSelected(null)} className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/60 text-white flex items-center justify-center">✕</button>
             </div>
             <div className="p-5 space-y-3">

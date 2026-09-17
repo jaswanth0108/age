@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
+import { getApiUrl, parseJsonResponse } from '../api'
 
 export default function AdminLogin() {
   const [username, setUsername] = useState('admin')
@@ -13,13 +14,13 @@ export default function AdminLogin() {
     setError(null)
     setLoading(true)
     try {
-      const res = await fetch('/api/admin/login', {
+      const res = await fetch(getApiUrl('/api/admin/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ username, password })
       })
-      const data = await res.json()
+      const data = await parseJsonResponse(res)
       if (!res.ok) throw new Error(data.error || 'Login failed')
       if (data.token) localStorage.setItem('agelens_token', data.token)
       navigate('/admin')
