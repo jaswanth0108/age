@@ -27,14 +27,6 @@ export default function Home() {
                   Start Camera
                   <span className="bg-white/20 rounded-full p-1"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></span>
                 </button>
-                <div className="flex items-center gap-3 text-sm text-slate-600">
-                  <div className="flex -space-x-2">
-                    <img src="https://i.pravatar.cc/100?img=5" className="w-8 h-8 rounded-full border-2 border-white" alt="" />
-                    <img src="https://i.pravatar.cc/100?img=8" className="w-8 h-8 rounded-full border-2 border-white" alt="" />
-                    <img src="https://i.pravatar.cc/100?img=12" className="w-8 h-8 rounded-full border-2 border-white" alt="" />
-                  </div>
-                  <span className="leading-tight">Trusted by <b className="text-slate-900">12k+</b> users<br/>4.9/5 rating</span>
-                </div>
               </div>
 
               <div className="mt-10 grid grid-cols-3 gap-6 max-w-md">
@@ -108,7 +100,7 @@ export default function Home() {
             {[
               { n: '01', t: 'Allow Camera', d: 'Grant permission. We show a live preview and check lighting + face count instantly.', icon: '📷' },
               { n: '02', t: 'AI Analysis', d: 'Our replaceable AI model estimates age, range and confidence in <1s — on secure backend.', icon: '🧠' },
-              { n: '03', t: 'See Results', d: 'Get AI Estimated Age, range and confidence. Retake anytime. Consent decides storage.', icon: '✨' },
+              { n: '03', t: 'See Results', d: 'Get AI Estimated Age, range and confidence. Retake anytime.', icon: '✨' },
             ].map(c => (
               <div key={c.n} className="bg-slate-50 rounded-[20px] p-6 border border-slate-100">
                 <div className="w-12 h-12 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-xl shadow-sm">{c.icon}</div>
@@ -130,29 +122,17 @@ export default function Home() {
 
       {/* Privacy */}
       <section className="bg-slate-900 text-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 grid md:grid-cols-2 gap-8 items-center">
-          <div>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div className="max-w-3xl">
             <h3 className="font-display font-bold text-2xl">Privacy by design</h3>
             <p className="mt-3 text-slate-300 leading-relaxed text-sm sm:text-base">
-              Images are processed securely and <b className="text-white">only stored if you consent</b>. When stored, they go to private encrypted storage with metadata only (ID, timestamp, age, range, confidence, consent). Auto-deletion after 30 days (configurable). Never public.
+              Images are processed securely on private encrypted storage with metadata only (ID, timestamp, age, range, confidence). Auto-deletion after 30 days. Never public.
             </p>
             <ul className="mt-5 space-y-2 text-sm text-slate-300">
-              <li className="flex gap-2"><span className="text-emerald-400">✓</span> Private S3-compatible storage (filesystem encrypted in demo)</li>
+              <li className="flex gap-2"><span className="text-emerald-400">✓</span> Private S3-compatible storage</li>
               <li className="flex gap-2"><span className="text-emerald-400">✓</span> Secure cookies, Helmet, rate limiting, input validation</li>
               <li className="flex gap-2"><span className="text-emerald-400">✓</span> Hidden admin portal • bcrypt • JWT • audit logs</li>
             </ul>
-          </div>
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
-            <div className="text-xs tracking-widest font-bold text-sky-300">ENCRYPTED STORAGE PREVIEW</div>
-            <div className="mt-4 font-mono text-xs leading-6 text-slate-300">
-              id: 9f3a…c1a2<br/>
-              timestamp: 2026-09-17T...<br/>
-              estimatedAge: 27<br/>
-              range: [25, 29]<br/>
-              confidence: 91%<br/>
-              consent: true<br/>
-              retention: 30 days
-            </div>
           </div>
         </div>
       </section>

@@ -69,7 +69,7 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col md:flex-row items-center justify-between gap-3 text-sm text-slate-500">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
-            © {new Date().getFullYear()} AgeLens • Privacy-first AI. Images stored only with consent.
+            © {new Date().getFullYear()} AgeLens • AI Age Estimation.
           </div>
           <div className="flex items-center gap-4">
             <span>Double-click logo for admin</span>

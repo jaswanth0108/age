@@ -19,7 +19,6 @@ export default function CameraPage() {
   const [error, setError] = useState<string | null>(null)
   const [capturing, setCapturing] = useState(false)
   const [result, setResult] = useState<EstimateResult | null>(null)
-  const [consent, setConsent] = useState(true)
   const [status, setStatus] = useState<{ faces: number | null, lighting: string, brightness: number, ready: boolean, message: string }>({
     faces: null, lighting: 'checking', brightness: 0, ready: false, message: 'Initializing camera...'
   })
@@ -202,7 +201,7 @@ export default function CameraPage() {
       setIsProcessing(true)
       const form = new FormData()
       form.append('image', blob, 'capture.jpg')
-      form.append('consent', String(consent))
+      form.append('consent', 'true')
 
       const resp = await fetch(getApiUrl('/api/estimate'), { method: 'POST', body: form })
       const data = await parseJsonResponse(resp)
@@ -307,13 +306,6 @@ export default function CameraPage() {
           </div>
 
           <div className="p-5 sm:p-6 space-y-4">
-            <label className="flex gap-3 items-start bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 cursor-pointer hover:bg-slate-100 transition">
-              <input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)} className="mt-1 w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500" />
-              <span className="text-sm leading-snug text-slate-700">
-                <b>Store securely with consent</b> — Save this capture with encrypted private storage (ID, timestamp, age, range, confidence). Auto-deleted after 30 days. <span className="text-slate-500">Uncheck to not store.</span>
-              </span>
-            </label>
-
             <div className="flex gap-3">
               <button
                 onClick={captureAndEstimate}
@@ -332,7 +324,7 @@ export default function CameraPage() {
               </div>
             )}
             <div className="text-xs text-slate-500 text-center">
-              By capturing you agree to AI processing. <b>Consent determines storage</b>.
+              By capturing you agree to AI processing.
             </div>
           </div>
         </div>
@@ -392,24 +384,11 @@ export default function CameraPage() {
                 </div>
 
                 <div className="text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-xl px-4 py-3">
-                  <div className="flex justify-between"><span>Image ID</span><span className="font-mono text-slate-700">{result.imageId || 'not stored (no consent)'}</span></div>
+                  <div className="flex justify-between"><span>Image ID</span><span className="font-mono text-slate-700">{result.imageId || 'processed'}</span></div>
                   <div className="flex justify-between mt-1"><span>Brightness</span><span>{result.brightness}</span></div>
-                  <div className="flex justify-between mt-1"><span>Consent</span><span className={consent ? 'text-emerald-600 font-bold' : 'text-slate-600'}>{consent ? 'Given — encrypted & stored' : 'Not given — not stored'}</span></div>
                 </div>
               </div>
             )}
-          </div>
-
-          <div className="bg-slate-900 text-white rounded-[24px] p-6">
-            <div className="text-sm font-bold tracking-widest text-sky-300">PRIVACY NOTE</div>
-            <p className="mt-2 text-sm leading-relaxed text-slate-300">
-              We <b className="text-white">never expose stored images publicly</b>. Gallery is admin-only. Images are encrypted at rest, metadata-only DB, and auto-deleted after retention period. Toggle consent before capture.
-            </p>
-            <div className="mt-4 flex gap-2 text-xs">
-              <span className="bg-white/10 px-3 py-1.5 rounded-full border border-white/10">🔒 Encrypted</span>
-              <span className="bg-white/10 px-3 py-1.5 rounded-full border border-white/10">🕒 Auto-delete 30d</span>
-              <span className="bg-white/10 px-3 py-1.5 rounded-full border border-white/10">👤 Consent-based</span>
-            </div>
           </div>
         </div>
       </div>
